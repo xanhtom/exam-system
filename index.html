@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Hệ thống thi trắc nghiệm (Azota/IIG style)</title>
+<title>Hệ thống thi trắc nghiệm – BẢN ĐÃ FIX</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--primary:#2563eb;--danger:#dc2626}
@@ -10,7 +10,8 @@ body{margin:0;font-family:Segoe UI,Arial;background:var(--bg)}
 header{background:var(--primary);color:#fff;padding:14px;text-align:center;font-size:20px;font-weight:600}
 .container{max-width:1000px;margin:auto;padding:20px}
 .card{background:var(--card);border-radius:10px;padding:20px;margin-bottom:20px;box-shadow:0 5px 20px rgba(0,0,0,.08)}
-input,select,button{padding:10px;margin:6px 0;width:100%}
+input,select,textarea,button{padding:10px;margin:6px 0;width:100%;box-sizing:border-box}
+textarea{min-height:80px}
 button{background:var(--primary);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer}
 button.danger{background:var(--danger)}
 .hidden{display:none}
@@ -23,7 +24,6 @@ button.danger{background:var(--danger)}
 <header>HỆ THỐNG THI TRẮC NGHIỆM ONLINE</header>
 <div class="container">
 
-<!-- LOGIN -->
 <div id="login" class="card">
 <h3>Đăng nhập</h3>
 <select id="role">
@@ -34,9 +34,8 @@ button.danger{background:var(--danger)}
 <button onclick="login()">Đăng nhập</button>
 </div>
 
-<!-- TEACHER -->
 <div id="teacher" class="card hidden">
-<h3>Giáo viên – Quản lý đề & ca thi</h3>
+<h3>Giáo viên – Tạo đề</h3>
 <input id="examTitle" placeholder="Tên đề thi">
 <input id="examTime" type="number" placeholder="Thời gian (phút)">
 <input id="sessionName" placeholder="Tên ca thi">
@@ -48,11 +47,10 @@ button.danger{background:var(--danger)}
 <input id="d" placeholder="Đáp án D">
 <select id="correct"><option>A</option><option>B</option><option>C</option><option>D</option></select>
 <button onclick="addQuestion()">Thêm câu hỏi</button>
-<button onclick="publishExam()">Xuất đề & ca thi</button>
+<button onclick="publishExam()">Lưu đề</button>
 <p id="teacherMsg"></p>
 </div>
 
-<!-- STUDENT -->
 <div id="student" class="card hidden">
 <h3 id="examName"></h3>
 <p id="sessionInfo"></p>
@@ -62,47 +60,53 @@ button.danger{background:var(--danger)}
 <button class="danger" onclick="submitExam()">Nộp bài</button>
 </div>
 
-<!-- RESULT -->
 <div id="result" class="card hidden">
 <h3>Kết quả</h3>
 <p>Thí sinh: <b id="stuName"></b></p>
-<p>Điểm: <b id="score"></b></p>
+<p>Điểm: <b id="scoreText"></b></p>
 <button onclick="exportExcel()">Xuất Excel</button>
 </div>
 
 </div>
 <script>
-let questions=[], exam={}, timeLeft, tabCount=0;
+let questions=[], exam={}, timeLeft=0, tabCount=0;
 
 function login(){
- localStorage.setItem('user',username.value);
- login.classList.add('hidden');
- role.value==='teacher' ? teacher.classList.remove('hidden') : loadExam();
+ const name=document.getElementById('username').value.trim();
+ if(!name){alert('Nhập tên');return;}
+ localStorage.setItem('user',name);
+ document.getElementById('login').classList.add('hidden');
+ if(document.getElementById('role').value==='teacher'){
+  document.getElementById('teacher').classList.remove('hidden');
+ }else{
+  loadExam();
+ }
 }
 
 function addQuestion(){
  questions.push({q:questionText.value,A:a.value,B:b.value,C:c.value,D:d.value,correct:correct.value});
  teacherMsg.innerText='Đã thêm '+questions.length+' câu';
+ questionText.value=a.value=b.value=c.value=d.value='';
 }
 
 function publishExam(){
- exam={title:examTitle.value,time:+examTime.value*60,session:sessionName.value,questions};
+ exam={title:examTitle.value,time:parseInt(examTime.value||1)*60,session:sessionName.value,questions:questions};
  localStorage.setItem('exam',JSON.stringify(exam));
- teacherMsg.innerText='Đề & ca thi đã lưu';
+ teacherMsg.innerText='Đề đã lưu, học sinh có thể thi';
 }
 
 function loadExam(){
  exam=JSON.parse(localStorage.getItem('exam'));
- if(!exam) return alert('Chưa có đề thi');
- student.classList.remove('hidden');
+ if(!exam){alert('Chưa có đề thi');location.reload();return;}
+ document.getElementById('student').classList.remove('hidden');
  examName.innerText=exam.title;
  sessionInfo.innerText='Ca thi: '+exam.session;
- questions=[...exam.questions].sort(()=>Math.random()-.5);
+ questions=[...exam.questions].sort(()=>Math.random()-0.5);
+ examForm.innerHTML='';
  questions.forEach((q,i)=>{
-  let opts=['A','B','C','D'].sort(()=>Math.random()-.5);
+  let opts=['A','B','C','D'].sort(()=>Math.random()-0.5);
   examForm.innerHTML+=`<div class='question'><p>${i+1}. ${q.q}</p>`+
    opts.map(k=>`<label><input type='radio' name='q${i}' value='${k}'> ${k}. ${q[k]}</label><br>`).join('')+`</div>`;
-  q._order=opts;
  });
  timeLeft=exam.time;
  countdown();
@@ -110,9 +114,10 @@ function loadExam(){
 }
 
 function countdown(){
- let t=setInterval(()=>{
-  timer.innerText='Thời gian còn: '+timeLeft+'s';
-  timeLeft--; if(timeLeft<0){clearInterval(t);submitExam();}
+ const t=setInterval(()=>{
+  timer.innerText='Thời gian còn: '+timeLeft+' giây';
+  timeLeft--;
+  if(timeLeft<0){clearInterval(t);submitExam();}
  },1000);
 }
 
@@ -123,28 +128,28 @@ function monitorTab(){
 }
 
 function submitExam(){
- let score=0;
+ let totalScore=0;
  questions.forEach((q,i)=>{
-  let a=document.querySelector(`input[name=q${i}]:checked`);
-  if(a && a.value===q.correct) score++;
+  let ans=document.querySelector(`input[name=q${i}]:checked`);
+  if(ans && ans.value===q.correct) totalScore++;
  });
- localStorage.setItem('result',JSON.stringify({name:localStorage.getItem('user'),score,total:questions.length}));
- student.classList.add('hidden');
+ localStorage.setItem('result',JSON.stringify({name:localStorage.getItem('user'),score:totalScore,total:questions.length}));
+ document.getElementById('student').classList.add('hidden');
  showResult();
 }
 
 function showResult(){
- let r=JSON.parse(localStorage.getItem('result'));
- result.classList.remove('hidden');
+ const r=JSON.parse(localStorage.getItem('result'));
+ document.getElementById('result').classList.remove('hidden');
  stuName.innerText=r.name;
- score.innerText=r.score+'/'+r.total;
+ scoreText.innerText=r.score+'/'+r.total;
 }
 
 function exportExcel(){
- let r=JSON.parse(localStorage.getItem('result'));
- let csv='Tên,Điểm\n'+r.name+','+r.score+'/'+r.total;
- let blob=new Blob([csv],{type:'text/csv'});
- let a=document.createElement('a');
+ const r=JSON.parse(localStorage.getItem('result'));
+ const csv='Tên,Điểm\n'+r.name+','+r.score+'/'+r.total;
+ const blob=new Blob([csv],{type:'text/csv'});
+ const a=document.createElement('a');
  a.href=URL.createObjectURL(blob);
  a.download='ket_qua.csv';
  a.click();
